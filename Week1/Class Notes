@@ -1,0 +1,269 @@
+# Crypto Notes Week 1
+
+The first half of the course will be about sym. enc. and the second half will be about public key enc.
+
+## Introduction and Prereqs
+
+### What is cryptography?
+
+The core of cryptography is about:
+  - establishing a secret key between two parties
+  - securing communications between these two parties
+
+These two areas of cryptography encompass a vast number of techniques, such as:
+  - digital signatures
+  - anonymous communication
+  - secure multi-party communication
+  - homomorphic encryption/encrypted cloud computation
+  - zero knowledge proofs
+
+In this course, we will tackle new cryptographic constructions as follows:
+
+1. Precisely specify a threat model
+2. Propose a construction
+3. Prove that breaking the construction under the threat model is equivalent to solving a hard problem
+
+All constructions must be accompanied by a proof of security.
+
+### Discrete Probability Crash Course
+
+Let `U` be a finite set `U = {0,1}^n`.
+
+Def: A probability distribution is a function `P: U -> [0,1]` s.t `\sum_{x \in U}{P(x)} = 1`.
+
+Ex: Let `P(x) = 1/|U|`. Clearly, the sum of `P` over all `x` is 1. We call this `P` a uniform distribution.
+
+Def: Let `A \subset U`. Then `Pr(A)` is the sum of the probabilities of the individual elements in `A` under some distribution. We call `A` an event.
+
+Unless specified otherwise, we use the uniform distribution as the underlying distribution for the probabilities of events.
+
+Thm: Let `A,B \subset U`. Then `Pr(A U B) <= Pr(A) + Pr(B)`.
+
+Def: Let `X: U -> V`. Then `X` is called a random variable.
+
+A random variable induces a probability dist. on a space `V` via: `Pr[X=v] := Pr[X^-1(v)]`, i.e. the probability that
+given an element `v \in V`, the probability that `v` is in the preimage of `X` under `v`.
+
+Def: A uniform random variable is a random variable s.t. for all `v \in V, Pr[X=v] = 1/|U|`.
+
+Def: Two events `A, B \subset U` are independent iff `Pr[A \intersect B] = Pr[A] + Pr[B]`.
+
+Similarly, one can also define independence for random variables.
+
+Def: Two random variables `X, Y st. X,Y: U -> V` are independent iff for all `a,b \in V, Pr[X=a and Y=b] = Pr[X=a] * Pr[Y=b]`.
+
+## Information Theoretic Security and The OTP
+
+Def: A cipher defined over `(K, M, C)` is a pair of `efficient` algorithms `(E, D)` s.t:
+  - E: KxM -> C
+  - D: KxC -> M
+  - D o E = id, for all fixed key k \in K (note that this is only a left inv => E is injective, which confirms what we know)
+
+Note that E is often randomized, while D is always deterministic. This is because E generated randomness to encrypt, while D uses only the randomness in the key.
+
+### The One Time Pad
+
+The OTP is defined as follows. Let `M = C = {0, 1}^n` be the PT and CT spaces respectively and let `K = {0, 1}^n` be the key space, where the elements of K are random bitstrings in {0, 1}^n.
+
+For the OTP, encryption and decryption is defined as:
+
+```
+E(k, m) = k XOR m
+D(k, c) = k XOR c
+```
+
+Clearly, this is a cipher. However is suffers from some problems, namely:
+  - Sym. so if Alice can send Bob a key, why can't she send him a message?
+  - If we know the message and the ciphertext, retreiving the key is trivial
+
+But is this secure? In other words, given the CT is it possible in poly time to derive the PT?
+
+### Information Theoretic Security
+
+The idea is that the ciphertext should reveal no information about the plaintext.
+
+Def (Shannon): A cipher `(E, D)` over `(K, M, C)` has perfect secrecy if, for all `a, b \in M` and for all `c \in C, Pr[E(k,a) = c] = Pr[E(k,b) = c]`, where `k` is uniform in `K`.
+
+What this means is that given a cipher text, `c`, we have no clue which message it encodes. Picking the right message is as good as guessing at random.
+
+This implies that even the most powerful adversary learns nothing from the CT about the PT.
+
+Lem: OTP has perfect secrecy.
+
+Proof: `Pr[E(k, m) = c] = (# of keys which map m -> c under E)/|K|`. Now `# of keys which map m -> c under E = 1` as we are XORing. To prove this assume `E(k,m) = c = E(k', m)`, i.e. two keys map `m` to `c`. Then `k XOR m = c = k' XOR m`. XORing both sides by `m`, we obtain `k = k'`. Thus, there is only one unique key mapping `m` to `c`. Therefore,
+
+```
+Pr[E(k, m) = c] = 1/|K|, for all m.
+```
+
+Therefore, OTP has perfect secrecy. QED.
+
+This implies that there is no CT only attack on OPT! However, it is nonetheless not secure under other attacks.
+
+Are there other ciphers with perfect secrecy which don't suffer from the flaws that the OTP does? Unfortunately, Shannon showed us that the OPT is in fact the optimal cipher w/ perfect secrecy.
+
+Thm (Shannon): A cipher `(E, D)` over `(K, M, C)` has perfect secrecy iff `|K| >= |M|`.
+
+Any other cipher with perfect secrecy would need to have `|K| > |M|`, which means it would suffer from the same problems that OTP does.
+
+Now lets talk about making the OTP more practical, by using the stream cipher construction.
+
+## Stream Ciphers
+
+The idea is that we replace the random key in OTP with a pseudorandom key, which is hopefully smaller than `|M|`.
+
+The core primitive underlying stream ciphers is the pseudorandom generator, or PRG, which is a function taking `G: {0,1}^s -> {0,1}^n`, where `s << n`, and such that the output of this PRG is indistinguishable from random.
+
+This generator can be used to create a stream cipher as follows:
+
+1. Use the key to seed the generator
+2. Generate a large pseudorandom value
+3. XOR this value with the message and output the ciphertext
+
+Clearly stream ciphers do not have perfect secrecy. So how can we find out if stream ciphers are secure or not?
+
+Well, we can identify certain properties a PRG must have if it is to be secure in any way. One such property is called unpredictability. A PRG `G: {0,1}^s -> {0,1}^n` is predictable if, given the first n bits of the image of `G` under `k`, there exists a efficient det. alg. which can derive the subsequent bits of the image of `G` under `k`.
+
+Suppose a PRG is predictable. Then, if the adversary knows even a small prefix of the initial encrypted message (for example, the "Re:" in emails), he could derive the rest of the key and decrypt the message using an XOR.
+
+More formally, a PRG, `G: {0,1}^s -> {0,1}^n` is predictable if there exists an efficient alg. A s.t `Pr[A(G(k))|_{1..i} = G(k)|_{i+1}] >= 1/2 + \varepsilon`, i.e. `A` can derive with probability greater than 1/2 the value of the next bit in the pseudorandom output.
+
+This means that the adversary can distinguish between the PRG and a truly random function with probability `\varepsilon` in polynomial time.
+
+Therefore, a PRG is unpredictable if for all bits, there is no efficient algorithm to predict the (i+1)th bit with non-negligible epsilon. Ergo, the adversary cannot distinguish between the output of the PRG and a truly random string in poly time.
+
+What values can `\varepsilon` take? And what is negligible/non-negligible?
+
+In practice, epsilon is non-neg if `\varepsilon >= 1/2^30` and neg if `\varepsilon <= 1/2^80`. 
+
+More rigorously, if we define \varepsilon as a function `e:Z^+ -> R^+`, then we say epsilon is neg if for all `d \in N, e(n) <= 1/n^d`, in another notation, `e = o(1/n^d)`. This says that epsilon is bound above by all 1/polynomials. Similarly, we say that if `e(n) >= 1/n^d` inf. often, then `e` is non-neg.
+
+We've now seen how to convert the OTP into a cipher, specifically, a stream cipher. We will now develop a new definition of security.
+
+## Attacks on Stream Ciphers and the OTP
+
+Lets talk about attacks on the OTP.
+
+Consider the encryption of two messages under a stream cipher, `c_1 = PRG(k) XOR m_1` and `c_2 = PRG(k) XOR m_2`. With this information, the attacker can XOR the two cipher texts to get `m_1 XOR m_2`. It turns out, one can derive `m_1` and `m_2` from their XOR, due to redundancies in natural language. Therefore, the attacker can obtain the PTs using 2 different CTs under the same key. This is called a two time pad attack.
+
+The two time pad attack can also be used to break OTP. Thus, OTP can only be used once with each key.
+
+This attack can also manifest itself in server/client interaction. You must never use the same key when sending encrpyted traffic between the two, or else it amounts to a two time pad attack. The solution is to have a pair of keys, which contian a key for client -> server, and another for server -> client.
+
+Another possible attack we could mount on OPT/stream ciphers works as follows: Suppose we have a message `m` which is encrypted as `m XOR k`. Rather than try to figure out `m`, the attacker could XOR `m XOR k` with another value `p` to obtain `m XOR p XOR k`. Now, when the CT is decrypted, it becomes `m XOR p`. This ability to modify the ciphertext without detection is called malleability.
+
+For example, suppose we encrpyt a message beginning with "From: Bob" and the attacker knows that the word "Bob" is at the 7th position in the CT. Then the attacker can engineer a bitstring `b` s.t `m XOR k XOR b` = `m' XOR k`, where `m'` is a message of the attackers choice. The attacker could, for example, change "From: Bob" to "From: Eve" and impersonate Eve.
+
+## Real World Stream Ciphers
+
+Let's discuss some real world ciphers.
+
+### RC4
+
+RC4 is used in HTTPS and (incorrectly) in WEP. RC4 suffers from the following weaknesses:
+
+1. Its intial (256bit) output is slightly biased. `Pr[2nd byte = 0] = 2/256`
+2. Prob. of (0,0) is `1/256^2 + 1/256^3`
+3. There exist related key attacks on RC4 (as used in WEP)
+
+### CSS: Content Scrambling System
+
+The CSS stream cipher is implemented using a linear feedback shift register (LFSR), which is hardware efficient.
+
+CSS uses two LFSRs in conjuction with a mod 256 adder to generate a byte with which to XOR the appropriate byte of the DVD. However, since DVDs are formatted using a specification (such as mp4) we know what the initial portion of the DVD will be. Thus, we can retreive the beginning of the random bytes used to encrypt the DVD. From here, it is possible to brute force the values of the first LFSR (2^17 bits) and from there retreive the key in it's entierity.
+
+### Modern Stream Ciphers: eStream (2008)
+
+Modern stream ciphers use a PRG which uses a seed and a nonce, `PRG: {0,1}^s x R -> {0,1}^n, s << n`.
+
+The nonce is a non-repeating value used for a specific key. This means you can reuse the key so long as you change the nonce, and the pair `(k, nonce)` is never used more than once.
+
+An example of a nonce based stream cipher is eStream's Salsa20. Salsa20 uses a 128 (or 256) bit key and a 64 bit nonce. Salsa20 is defined as follows:
+
+  Salsa20(k; r) := H(k, (r, 0)) || H(k, (r, 1) || ...
+  
+At each H(.), a smaller scrambling function h is used given an expanded version of the key, the nonce, and certain constants. After iterating h 10 times, and adding the expanded key and nonce we obtain the result of H.
+
+So far, there have been no significant attacks on Salsa20.
+
+## PRG Security Definition
+
+We will now more formally define the security of a PRG.
+
+What does is mean for a PRG to be good, or secure? Naturally, a PRG is secure if it is indistinguishable from a truly random string (in poly time).
+
+To formalize this indistinguishability, we introduce the idea of a statistical test. A stat. test on `n` bits is defined as an alg. `A` s.t `A(x)` ouputs 0 (w/ high probability) if the input is not random, and 1 (with high probability) if the input is random.
+
+To evaluate whether a stat. test succeded or failed to identify a PRG, we calculate the following:
+
+```
+|Pr[A(G(k) = 1] - Pr[A(r) = 1]| = Adv[A,G]
+```
+
+Where `r` is sampled from a truly random variable.
+
+This is called the advantage of `A` over `G`. If the advantage is negligible, then we can say that the test cannot distinguish between the PRG and truly random strings, wheras if the advantage is non-neg. we can say that the test `A` can distinguish between the PRG and truly random strings, or `A` breaks the PRG.
+
+Now, we can precisely define the security of PRGs:
+
+A PRG `G: K -> {0,1}^n` is a secure PRG if for all poly time stat. tests `A`, Adv[A,G] is negligible.
+
+Now, do there exist provably secure PRGs? Unfortuantely no one knows. However, a provably secure PRG would imply that `P = NP`, which many people believe is not true. Thus, most likely, provably secure PRGs do not exist. However, we have lots of heuristic candidates for provable security, so this is not an issue in practice.
+
+Lem: A secure PRG is unpredictable.
+
+Suppose `G` is a PRG, s.t. `G` is secure and predictable. This implies that there exists a poly time algorithm which, given the first `i` bits of `G`, can predict the `i+1` th bit of G with probability `1/2 + e`, where `e` is non-neg.
+
+We can now define a stat. test `B` s.t `B(x) = 1 iff A(X|i) = the i+1th bit of X` and 0 otherwise. Now, consider the advantage of `B` over `G`:
+
+```
+Adv[B,G] = |Pr[B(G(x)) = 1] - Pr[B(r) = 1]| = |1/2 + e - 1/2| = e
+```
+
+Since `e` is non-neg, `B` has a non-neg advantage over `G` and thus `B` breaks `G`, contradicting the security of `G`. Thus, `G` cannot be predictable.
+
+Surprisingly, it turns out the converse is also true.
+
+Thm (Yao): Let `G: K -> {0,1}^n` by an unpredictable PRG. Then `G` is secure.
+
+More generally, two prob. distributions over `{0,1}^n` are computationally indistinguishable, `P_1 =_p P_2` if for all eff stat. tests `A`, `|Pr[A(P_1) = 1] - Pr[A(P_2) = 1]| < neg`.
+
+## Semantic Security
+
+Now, we will see how  secure PRG defines a secure stream cipher.
+
+In the case of stream ciphers, only one key is used per ciphertext, thus we will allow our attacker access to one ciphertext.
+
+Recall our definition of of perfect secrecy. A cipher has perfect secrecy if under a fixed key, two messages are indistinguishable from one another when encrypted. More formally, `Pr[E(k,m_1) = c] = Pr[E(k,m_2) = c]`. Clearly, this is too strong (only the OTP/worse can satisfy this claim).
+
+Instead, suppose we relax this definition as follows: For pairs of messages chosen by the attacker, the prob. distributions induced by `Pr[E(k,m_1) = c]` and `Pr[E(k,m_2) = c]` are indistinguishale in poly time, i.e., they are computationally indistinguishable.
+
+Now, similar to the PRG case, we can define a game which will allow us to calculate the advantage of an adversary over our cipher. The game proceeds as follows. The adversary is allowed to request the encryption of two chosen plaintexts, `m_0` and `m_1` and he must find out whether he was given the encrpytion of `m_0` or `m_1`. If the adversary can identify (in poly time) which message he was given with non-negligible probability, we say the adversary has non-neg. advantage, and breaks the cipher. Formally, if the advantage is defined as:
+
+```
+Adv[A,E]  = |Pr[A(E(m_0)) = 1] - Pr[A(E(m_1)) = 1]| 
+```
+
+Therefore, just as we defined secure PRGs, we can define secure ciphers as follows: For all eff. adversaries `A`, a cipher is semantically secure iff `Adv[A,E] <= neg`.
+
+This turns out to be a particularly elegant system; indeed we will see that even if the cipher leaks one bit of the PT, it is broken under semantic security.
+
+For example, suppose we have a cipher `E` from which an efficient adversary `A` can deduce the LSB of the PT from the CT. Then, under the semantic security game, there exists a winning strategy for the adversary. The adv. will simply request the chal. encrypt two message, whose LSB differs, (`LSB(a) = 0, LSB(b) = 1`). Now, when the chal. returns the CT, the adv. can simply inspect the LSB to see which PT was encrypted. Thus the adversary has advantage 1, as:
+
+```
+Adv[A,E]  = |Pr[A(E(m_0)) = 1] - Pr[A(E(m_1)) = 1]| = |0 - 1| = 1
+```
+
+This completes out def. of semantic security. Next, we're going to show that a secure PRG induces a semantically secure stream cipher.
+
+## Thrm: Stream Ciphers Based on Secure PRGs are Semantically Secure
+
+Thrm: Let `G: K -> {0,1}^n` be a secure PRG. Then a stream cipher `E` derived from `G` is sem. sec.
+
+Proof:
+
+We will consider a game between an adversary and a challenger using a secure PRG based stream cipher to encrypt messages. We then show that this game is equivalent to the OPT game, which we know is semantically secure (as OTP is actually perfectly secure). This will prove that all eff adversaries have 0 advantage over the challenger, i.e `Adv[A,E] <= neg`, and therefore that the cipher is semantically secure.
+
+Consider a sem. sec. adversary `A` challenging a challenger `C`, where `C` encrypts PTs using a stream cipher based on a secure PRG `G: K -> {0,1}^n`. Suppose `A` chooses 2 PT messages for `C` to encrypt, `m_0` and `m_1`. Now, let `k <- K`, and consider `E(k, m_b)`. Since we're using `G` as the PRG underlying the cipher `E(k,m_b) = PRG(k) XOR m_b`. However, we know that all poly time adversaries `B` cannot distinguish `G(k')` and a truly random string `r`. In other words, `G(k') =_p r`. Therefore, if an adversary can distinguish `m_1 XOR G(k)` and `m_0 XOR G(k)`, she can effectively differentiate between `m_1 XOR r` and `m_0 XOR r`, which we know is not possible in poly time. Therefore, all adversaries `A` have `Adv[A,E] < neg`.
+
+QED.
